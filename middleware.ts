@@ -1,28 +1,43 @@
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 import { appConfig } from "@/config";
 import createMiddleware from "next-intl/middleware";
-import { NextRequest } from "next/server";
 
-export default async function middleware(req: NextRequest) {
-  const reqHeaders = new Headers(req.headers);
-  reqHeaders.set('x-request-url', req.url);
+export function middleware(req: NextRequest) {
+  const basicAuth = req.headers.get('authorization');
 
-  // Create a new request with updated headers
-  const modifiedRequest = new NextRequest(req.url, {
-    headers: reqHeaders,
-    method: req.method,
-    body: req.body
+  if (basicAuth) {
+    const authValue = basicAuth.split(' ')[1];
+    const decodedValue = Buffer.from(authValue, 'base64').toString('utf-8');
+    const [user, password] = decodedValue.split(':');
+
+    if (user === 'admin' && password === 'admin1') {
+      // Continuar con el middleware de internacionalización después de la autenticación exitosa
+      const intlMiddleware = createMiddleware({
+        locales: appConfig.i18n.locales,
+        defaultLocale: appConfig.i18n.defaultLocale,
+        localePrefix: "as-needed",
+        localeDetection: true,
+        alternateLinks: true
+      });
+
+      return intlMiddleware(req); // No es necesario modificar la solicitud
+    } else {
+      console.log('Authentication failed');
+    }
+  } else {
+    console.log('Authorization header not found');
+  }
+
+  // Solicitar autenticación si no es exitosa
+  return new NextResponse('Authentication required', {
+    status: 401,
+    headers: {
+      'WWW-Authenticate': 'Basic realm="Secure Area"',
+    },
   });
-  const intlMiddleware = createMiddleware({
-    locales: appConfig.i18n.locales,
-    defaultLocale: appConfig.i18n.defaultLocale,
-    localePrefix: "as-needed",
-    localeDetection: true,
-    alternateLinks: true
-  });
-
-  return intlMiddleware(modifiedRequest);
 }
 
 export const config = {
-  matcher: ["/((?!api|_next|.*\\..*).*)"],
+  matcher: '/((?!api|_next/static|_next/image|favicon.ico).*)',
 };
